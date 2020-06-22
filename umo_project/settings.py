@@ -70,8 +70,9 @@ ROOT_URLCONF = 'umo_project.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [os.path.join(BASE_DIR, 'templates')]
-        ,
+        'DIRS': [
+            os.path.join(BASE_DIR, 'templates')
+        ],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -85,7 +86,7 @@ TEMPLATES = [
 ]
 
 STATICFILES_DIRS = (
-     os.path.join(BASE_DIR, 'static'), #сама папка указывается здесь
+     os.path.join(BASE_DIR, 'static'), # сама папка указывается здесь
 )
 
 WSGI_APPLICATION = 'umo_project.wsgi.application'
@@ -97,21 +98,23 @@ WSGI_APPLICATION = 'umo_project.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': os.path.join(BASE_DIR, 'db.sqlite3'),
+        'NAME': os.path.join(BASE_DIR, 'db_2.sqlite3'),
     },
-    'jesus': {
-        'NAME': 'YSUMain',
-        'ENGINE': 'sql_server.pyodbc',
-        'HOST': '10.2.8.6',
-        'USER': 'imi',
-        'PASSWORD': '31412',
-        'OPTIONS': {
-            'driver': 'ODBC Driver 11 for SQL Server',
-        },
-    }
+    # 'jesus': {
+        # 'ENGINE': 'django.db.backends.sqlite3',
+        # 'NAME': os.path.join(BASE_DIR, 'db2.sqlite3'),
+        # 'NAME': 'YSUMain',
+        # 'ENGINE': 'sql_server.pyodbc',
+        # 'HOST': '10.2.8.6',
+        # 'USER': 'imi',
+        # 'PASSWORD': '31412',
+        # 'OPTIONS': {
+            # 'driver': 'ODBC Driver 11 for SQL Server',
+        # },
+    # }
 }
 
-DATABASE_ROUTERS = ['umo_project.routers.DatabaseRouter']
+# DATABASE_ROUTERS = ['umo_project.routers.DatabaseRouter']
 
 
 # Password validation

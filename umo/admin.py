@@ -20,7 +20,7 @@ admin.site.register(models.EduPeriod)
 @admin.register(models.Discipline)
 class AdminDiscipline(admin.ModelAdmin):
     list_filter = ['program']
-    search_fields = ['Name']
+    search_fields = ['name']
 
 
 @admin.register(models.EduProgram)
@@ -70,7 +70,7 @@ class AdminTeacher(admin.ModelAdmin):
 @admin.register(models.Course)
 class AdminGroup(admin.ModelAdmin):
     list_display = ['discipline_detail', 'group', 'lecturer']
-    search_fields = ['discipline_detail__discipline__Name']
+    search_fields = ['discipline_detail__discipline__name']
     list_filter = ['group', 'lecturer']
 
 
@@ -80,5 +80,5 @@ admin.site.register(models.Synch)
 @admin.register(models.CourseMaxPoints)
 class CourseMaxPoints(admin.ModelAdmin):
     list_display = ['course', 'checkpoint', 'max_point']
-    search_fields = ['course__discipline_detail__discipline__Name']
+    search_fields = ['course__discipline_detail__discipline__name']
     list_filter = ['course__lecturer']

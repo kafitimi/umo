@@ -36,5 +36,6 @@ urlpatterns = [
     url(r'^$', views.teachers_subjects, name='mysubjects'),
     url(r'^api/',include(api, namespace='api')),
     url(r'^excel/',include(excel, namespace='excel')),
-    url(r'^exam_points/(?P<pk>[0-9]+)/(?P<control_id>[0-9]+)$', views.ExamPointsListView.as_view(), name='brs_student_list')
+    url(r'^exam_points/(?P<pk>[0-9]+)/(?P<control_id>[0-9]+)$', views.ExamPointsListView.as_view(), name='brs_student_list'),
+    url(r'^student_disciplines/$', views.StudentDisciplineList.as_view(), name='disciplines_list_student'),
 ]

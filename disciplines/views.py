@@ -18,7 +18,7 @@ from transliterate import translit
 import disciplines.view_excel as excel_forms
 from disciplines.view_excel import discipline_scores_to_excel
 from nomenclature.form import AddSubjectToteacherForm
-from umo.models import Semester, Person, Course
+from umo.models import Semester, Person, Course, Student
 from umo.models import (Teacher, Group, GroupList, Discipline, Control,
                         DisciplineDetails, BRSpoints, EduPeriod, ExamMarks, Exam)
 from umo.objgens import get_check_points, add_brs, add_exam, add_exam_marks
@@ -33,10 +33,19 @@ class DisciplineList(PermissionRequiredMixin, ListView):
         return Course.objects.all()
 
 
+class StudentDisciplineList(ListView):
+    template_name = 'disc_list_student.html'
+    context_object_name = 'discipline_list'
+
+    def get_queryset(self):
+
+        return Course.objects.filter(group=Student.objects.get(user=self.request.user).group)
+
+
 @login_required
 def list_disc(request, pk):
     teacher = Teacher.objects.get(id=pk)
-    disciplines = teacher.course_set.select_related('discipline_detail').all()#filter(is_finished=False)
+    disciplines = teacher.course_set.select_related('discipline_detail').all()  # filter(is_finished=False)
     form = AddSubjectToteacherForm()
     return render(request, 'disc_list.html', {'discipline_list': disciplines, 'form': form, 'teacher': teacher})
 
@@ -448,13 +457,14 @@ class StudentsScoresView(PermissionRequiredMixin, ListView):
             group_students = course.group.grouplist_set.select_related('student', 'group').filter(active=True).order_by('student__FIO')
             students_to_add = list(set(group_students.values_list('student__id', flat=True)) - set(context['object_list'].values_list('student__id', flat=True)))
             if len(students_to_add) > 0:
-                #calc students to add
+                # calc students to add
                 add_brs(course, GroupList.objects.filter(student__id__in=students_to_add), checkpoints)
-                context['object_list'] = BRSpoints.objects.filter(course__id=self.kwargs['pk'], student__id__in=group_students.values_list('student__id', flat=True)).select_related('student', 'checkpoint')
+                context['object_list'] = BRSpoints.objects.filter(course__id=self.kwargs['pk'], student__id__in=group_students.values_list(
+                    'student__id', flat=True)).select_related('student', 'checkpoint')
         else:
             students = set(context['object_list'].values_list('student__id', flat=True))
             group_students = course.group.grouplist_set.select_related('student', 'group').filter(student__id__in=students).order_by('student__FIO')
-        #elif len(context['object_list']) // 3
+        # elif len(context['object_list']) // 3
         context['points'] = {}
         context['maxpoints'] = {}
         for item in context['object_list']:

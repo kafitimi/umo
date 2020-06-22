@@ -86,11 +86,10 @@ class EduProgram(Model):
 
 class Group(Model):
     name = CharField(verbose_name="название группы", max_length=200, db_index=True)
-    begin_year = ForeignKey('Year', verbose_name="год начала обучения", db_index=True, blank=True, null=True,
-                            on_delete=SET_NULL)
+    begin_year = ForeignKey('Year', related_name='begin_year', verbose_name="год начала обучения", db_index=True, blank=True, null=True, on_delete=SET_NULL)
+    finish_year = ForeignKey('Year', related_name='finish_year', verbose_name="год окончания обучения", db_index=True, blank=True, null=True, on_delete=SET_NULL)
     cathedra = ForeignKey('Kafedra', verbose_name="кафедра", db_index=True, blank=True, null=True, on_delete=SET_NULL)
-    program = ForeignKey('EduProgram', verbose_name="программа", db_index=True, blank=True, null=True,
-                         on_delete=SET_NULL)
+    program = ForeignKey('EduProgram', verbose_name="программа", db_index=True, blank=True, null=True, on_delete=SET_NULL)
 
     class Meta:
         verbose_name = 'студенческая группа'
@@ -99,6 +98,16 @@ class Group(Model):
 
     def __str__(self):
         return self.name
+
+    def disciplines(self):
+        return self.program.discipline_set
+
+    def group_semesters(self):
+        return Semester.objects.filter(year__lte=self.finish_year).filter(year__gte=self.begin_year)
+
+    def edu_years(self):
+        return Year.objects.filter(year__lte=self.finish_year.year).filter(year__gte=self.begin_year.year)
+
 
     @property
     def year(self):
@@ -161,7 +170,6 @@ class Specialization(Model):
     POSTGRADUATE = 8
     INTERN = 9
 
-
     QUALIFICATION = (
         (UNDEFINED, '—'),
         (SPECIALIST, 'специалитет'),
@@ -213,14 +221,14 @@ class Discipline(Model):
 
 
 class DisciplineDetails(Model):
-    discipline = ForeignKey(Discipline, verbose_name="дисциплина", db_index=True, on_delete=CASCADE)
+    discipline = models.ForeignKey(Discipline, related_name='detail', verbose_name="дисциплина", db_index=True, on_delete=CASCADE)
+    semester = ForeignKey('Semester', verbose_name="семестр", db_index=True, null=True, on_delete=models.CASCADE)
     Credit = IntegerField(verbose_name="ЗЕТ", db_index=True, blank=True, null=True)
     Lecture = IntegerField(verbose_name="количество лекции", db_index=True, blank=True, null=True)
     Practice = IntegerField(verbose_name="количество практики", db_index=True, blank=True, null=True)
     Lab = IntegerField(verbose_name="количество лабораторных работ", db_index=True, blank=True, null=True)
     KSR = IntegerField(verbose_name="количество контрольно-самостоятельных работ", db_index=True, blank=True, null=True)
     SRS = IntegerField(verbose_name="количество срс", db_index=True, blank=True, null=True)
-    semester = ForeignKey('Semester', verbose_name="семестр", db_index=True, null=True, on_delete=models.CASCADE)
 
     class Meta:
         verbose_name = 'вариант дисциплины'
@@ -282,8 +290,7 @@ class Control(Model):
         (OTHERS, "Другие формы контроля"),
     )
 
-    discipline_detail = ForeignKey('DisciplineDetails', verbose_name="дисциплина", db_index=True, blank=True, null=True,
-                                   on_delete=CASCADE)
+    discipline_detail = models.ForeignKey('DisciplineDetails', verbose_name="дисциплина", db_index=True, blank=True, null=True, on_delete=CASCADE)
     control_type = IntegerField('форма контроля', choices=CONTROL_FORM, blank=True, default=0)
     control_hours = IntegerField(verbose_name="кол-во часов", default=0, db_index=True)
 
@@ -335,6 +342,7 @@ class Profile(Model):
 
 class Semester(Model):
     name = CharField(verbose_name="семестр", db_index=True, max_length=255, unique=True)
+    year = ForeignKey('Year', verbose_name="год обучения", db_index=True, blank=True, null=True, on_delete=SET_NULL)
 
     class Meta:
         verbose_name = 'семестр'
@@ -372,10 +380,14 @@ class EduPeriod(Model):
 
 class Student(Person):
     student_id = CharField(verbose_name="номер зачетной книжки", db_index=True, max_length=255)
+    group = models.ForeignKey(to=Group, related_name='students', on_delete=models.PROTECT, null=True)
 
     class Meta:
         verbose_name = 'студент'
         verbose_name_plural = 'студенты'
+
+    def get_exam_marks_for_semester(self, semester):
+        return self.exammarks_set.filter(exam__course__discipline_detail__semester=semester)
 
 
 class GroupList(Model):
@@ -394,8 +406,7 @@ class GroupList(Model):
 class Course(Model):
     group = ForeignKey(Group, verbose_name="группа", db_index=True, on_delete=CASCADE)
     discipline_detail = ForeignKey(DisciplineDetails, verbose_name="дисциплина", db_index=True, on_delete=CASCADE)
-    lecturer = ForeignKey(Teacher, verbose_name="преподаватель", db_index=True, blank=True, null=True,
-                          on_delete=SET_NULL)
+    lecturer = ForeignKey(Teacher, verbose_name="преподаватель", db_index=True, blank=True, null=True, on_delete=SET_NULL)
     is_finished = BooleanField('Курс окончен', default=False)
 
     class Meta:
@@ -404,6 +415,10 @@ class Course(Model):
 
     def __str__(self):
         return self.group.name + ':Семестр ' + self.discipline_detail.semester.name + ':' + self.discipline_detail.discipline.name
+
+    @property
+    def name(self):
+        return self.discipline_detail.discipline.name
 
 
 class CourseMaxPoints(Model):
@@ -416,14 +431,14 @@ class CourseMaxPoints(Model):
         verbose_name_plural = 'максимальные баллы за контрольный срез по дисциплинам'
 
     def __str__(self):
-        return self.course.discipline_detail.discipline.Name + '-' + self.checkpoint.name + ': ' + str(self.max_point)
+        return self.course.discipline_detail.discipline.name + '-' + self.checkpoint.name + ': ' + str(self.max_point)
 
 
 class BRSpoints(Model):
+    course = ForeignKey(Course, db_index=True, on_delete=CASCADE)
     student = ForeignKey(Student, db_index=True, on_delete=CASCADE)
     checkpoint = ForeignKey(CheckPoint, db_index=True, on_delete=CASCADE)
     points = FloatField(verbose_name="баллы", db_index=True, max_length=255)
-    course = ForeignKey(Course, db_index=True, on_delete=CASCADE)
 
     class Meta:
         verbose_name = 'балл БРС'
@@ -433,22 +448,40 @@ class BRSpoints(Model):
         )
 
     def __str__(self):
-        return self.student.FIO + ' - ' + self.course.discipline_detail.discipline.Name
+        return self.student.FIO + ' - ' + self.course.discipline_detail.discipline.name
 
 
 class Exam(Model):
-    examDate = DateTimeField(verbose_name="дата экзамена", db_index=True, auto_now_add=True)
     course = ForeignKey(Course, db_index=True, on_delete=CASCADE)
-    controlType = IntegerField('форма контроля', choices=Control.CONTROL_FORM)
     prev_exam = ForeignKey('self', verbose_name="предыдущий экзамен", blank=True, null=True, on_delete=SET_NULL)
+    examDate = DateTimeField(verbose_name="дата экзамена", db_index=True, auto_now_add=True)
+    controlType = IntegerField('форма контроля', choices=Control.CONTROL_FORM)
     is_finished = BooleanField('Экзамен закончен', default=False)
+
+    def control_type(self):
+        CONTROL_FORM = {
+            0: 'без контроля',
+            1: 'экзамен',
+            2: 'зачет',
+            3: 'зачет с оценкой',
+            4: 'курсовая работа',
+            5: "Курсовой проект",
+            6: "Контрольная работа",
+            7: "Домашняя контрольная работа",
+            8: "Оценка",
+            9: "Эссе",
+            10: "Реферат",
+            11: "Расчетно-графическая работа",
+            49: "Другие формы контроля",
+        }
+        return CONTROL_FORM.get(self.controlType, None)
 
     class Meta:
         verbose_name = 'контрольное мероприятие для курса обучения дисциплине'
         verbose_name_plural = 'контрольные мероприятия для курсов обучения дисциплинам'
 
     def __str__(self):
-        return self.course.discipline_detail.discipline.Name + '"' + self.examDate.strftime('%d.%m.%Y') + '"'
+        return self.course.discipline_detail.discipline.name + '"' + self.examDate.strftime('%d.%m.%Y') + '"'
 
 
 class ExamMarks(Model):
@@ -487,12 +520,17 @@ class ExamMarks(Model):
         verbose_name = 'экзаменационная оценка'
         verbose_name_plural = 'экзаменационные оценки'
 
+    # def get_for_semester(self, semester):
+        # {% for exammark in student.exammarks_set.all %}
+        #     {% if exammark.exam.course.discipline_detail.semester ==  semester %}
+    #    return self.exam.course.discipline_detail.semester
+
     def __str__(self):
-        return self.student.FIO + ' - ' + self.exam.course.discipline_detail.discipline.Name + ' - ' + self.MARKS[self.mark][1]
+        return self.student.FIO + ' - ' + self.exam.course.discipline_detail.discipline.name + ' - ' + self.MARKS[self.mark][1]
 
     @property
     def total_points(self):
-        return self.inPoints + self.additional_points + self.examPoints
+        return sum([self.inPoints, self.additional_points, self.examPoints])
 
     def get_mark_symbol(self):
         points = self.total_points

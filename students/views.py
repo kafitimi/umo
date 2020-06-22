@@ -1,13 +1,18 @@
 from datetime import datetime
 
+from django.contrib.auth import update_session_auth_hash
 from django.contrib.auth.decorators import permission_required, login_required
 from django.contrib.auth.mixins import PermissionRequiredMixin
 from django.contrib.auth.models import Group as auth_groups
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError
+from django.core.validators import validate_email
 from django.db import transaction
+from django.forms import ModelForm, PasswordInput, CharField
 from django.http import HttpResponse
 from django.shortcuts import render, redirect
 from django.urls import reverse_lazy
-from django.views.generic import ListView, CreateView, UpdateView, DeleteView
+from django.views.generic import ListView, CreateView, UpdateView, DeleteView, View
 
 import synch.models as sync_models
 from umo.models import (Teacher, Group, GroupList, Synch, Year, EduProgram, Student, Discipline, CheckPoint, Control,
@@ -16,6 +21,18 @@ from students.forms import GetGroupPointsForm
 from students.views_excel import export_group_points, export_exam_points
 
 from transliterate import translit
+
+
+class ScoresView(View):
+    def get(self, request):
+        context = {
+            'student': Student.objects.get(user=request.user),
+            # 'semesters': Semester.objects.all(),
+            # 'group_semesters': Student.objects.get(user=request.user).group.get_semesters(),
+            # 'diciplines': Student.objects.get(user=request.user).group.program.discipline_set.all(),
+        }
+        return render(request, 'my_scores.html', context=context)
+
 
 # Create your views here.
 
@@ -55,13 +72,15 @@ class StudentListView(StudentsList):
                     synch.finished = False
                 synch.date = datetime.now()
                 synch.save()
-                #synch = Synch.objects.last()
-                synch_groups = sync_models.PlnGroupStud.objects.filter(id_pln__id_dop__id_institute=1118, id_pln__dateend__gte=synch.date.strftime('%Y-%m-%d'))
+                # synch = Synch.objects.last()
+                synch_groups = sync_models.PlnGroupStud.objects.filter(id_pln__id_dop__id_institute=1118,
+                                                                       id_pln__dateend__gte=synch.date.strftime(
+                                                                           '%Y-%m-%d'))
                 n = synch_groups.count()
                 i = 1
                 for sg in synch_groups:
                     print(i, 'of', n)
-                    eduprogyear = sg.id_pln#sync_models.PlnEduProgYear.objects.filter(id_pln=sg.id_pln.id_pln).first()
+                    eduprogyear = sg.id_pln  # sync_models.PlnEduProgYear.objects.filter(id_pln=sg.id_pln.id_pln).first()
                     '''if synch.date > eduprogyear.dateend:
                         continue'''
 
@@ -72,7 +91,7 @@ class StudentListView(StudentsList):
                         g.id = sg.id_group
                         edu_program = EduProgram.objects.filter(specialization__code=eduprogyear.id_dop.id_spec.code,
                                                                 year__year__lte=eduprogyear.year).order_by(
-                                                                '-year__year').first()
+                            '-year__year').first()
                         g.program = edu_program
                         if edu_program is not None:
                             g.cathedra = edu_program.cathedra
@@ -134,8 +153,8 @@ class StudentCreateView(PermissionRequiredMixin, CreateView):
 @permission_required('umo.delete_student', login_url='/auth/login')
 def student_delete(request):
     if request.method == 'POST':
-        student_ = Student.objects.get(id = request.POST['item_id'])
-        grouplist_ = GroupList.objects.get(student__id = student_.id)
+        student_ = Student.objects.get(id=request.POST['item_id'])
+        grouplist_ = GroupList.objects.get(student__id=student_.id)
         grouplist_.active = False
         return redirect('students:student_changelist')
 
@@ -174,11 +193,13 @@ def group_brs_points(group, semester, check_point):
         student_points = {}
         student_points['scores'] = list(BRSpoints.objects.filter(student__id=sl.student.id,
                                                                  checkpoint__id=check_point.id,
-                                                                 course__discipline_detail__semester__id=semester.id).values_list('course__id', 'points'))
+                                                                 course__discipline_detail__semester__id=semester.id).values_list(
+            'course__id', 'points'))
         student_points['fullname'] = sl.student.FIO
         group_data['group_points'].append(student_points)
     group_data['courses'] = list(Course.objects.filter(group__id=group.id,
-                                                       discipline_detail__semester__id=semester.id).values_list('id', 'discipline_detail__discipline__name'))
+                                                       discipline_detail__semester__id=semester.id).values_list('id',
+                                                                                                                'discipline_detail__discipline__name'))
     return group_data
 
 
@@ -203,28 +224,80 @@ def group_exam_results(group, semester):
     return group_data
 
 
+class StudentProfileForm(ModelForm):
+    email = CharField(max_length=50, label='Email', required=True)
+    current_password = CharField(max_length=100, label='Текущий пароль', required=False, widget=PasswordInput)
+    password = CharField(max_length=100, label='Пароль', required=False, widget=PasswordInput)
+    confirmation = CharField(max_length=100, label='Подтверждение пароля', required=False, widget=PasswordInput)
+
+    class Meta:
+        model = Student
+        fields = ['last_name', 'first_name', 'second_name', 'group', 'student_id']
+
+    def clean(self):
+        # cleaned_data = super.clean()
+        validate_email(self.cleaned_data['email'])
+        crnt_pwd = self.cleaned_data['current_password']
+        pwd = self.cleaned_data['password']
+        confirmation = self.cleaned_data['confirmation']
+        if pwd != confirmation:
+            raise ValidationError('Введенные пароли не совпадают!')
+        if pwd != '':
+            if not self.instance.user.check_password(crnt_pwd):
+                raise ValidationError('Текущий пароль неверен!')
+            validate_password(pwd)
+        return self.cleaned_data
+
+
+@permission_required('umo.change_student', login_url='/auth/login')
 @login_required
-#@permission_required('umo.delete_student', login_url='/auth/login')
+def student_profile(request):
+    student = Student.objects.filter(user__id=request.user.id).first()
+    success_message = None
+    if student is not None:
+        if request.method == 'POST':
+            form = StudentProfileForm(request.POST, instance=student)
+            if form.is_valid():
+                try:
+                    form.save()
+                    update_session_auth_hash(request, student.user)
+                    success_message = 'Профиль успешно сохранен!!'
+                except:
+                    form.add_error('first_name', 'Ошибка сохранения данных!')
+        else:
+            form = StudentProfileForm(instance=student, initial={'email': request.user.email})
+        return render(request, 'teacher_edit.html', {'form': form, 'success_message': success_message, 'profile': 1})
+    return HttpResponse('You are not student!!')  # render(request, 'teacher_edit.html')
+
+
+@login_required
+# @permission_required('umo.delete_student', login_url='/auth/login')
 def group_points(request):
     try:
         person = request.user.person_set.get()
         institute = Teacher.objects.get(pk=person.id).cathedra.institution
     except:
-        return HttpResponse('You are not teacher!')
-    #group = Group.objects.all()#filter(cathedra__institution__id=institute.id)
-    group = Group.objects.get(pk=request.GET['group']) if 'group' in request.GET else Group.objects.filter(program__isnull=False).first()
+        return redirect('students:my_scores')
+    # group = Group.objects.all()#filter(cathedra__institution__id=institute.id)
+    group = Group.objects.get(pk=request.GET['group']) if 'group' in request.GET else Group.objects.filter(
+        program__isnull=False).first()
     if group.program is None:
         return HttpResponse('Программа обучения группы не установлена')
-    check_point = CheckPoint.objects.get(pk=request.GET['checkpoint']) if 'checkpoint' in request.GET else CheckPoint.objects.first()
-    semester = Semester.objects.get(pk=request.GET['semester']) if 'semester' in request.GET else Semester.objects.get(name=group.current_semester)
+    check_point = CheckPoint.objects.get(
+        pk=request.GET['checkpoint']) if 'checkpoint' in request.GET else CheckPoint.objects.first()
+    semester = Semester.objects.get(pk=request.GET['semester']) if 'semester' in request.GET else Semester.objects.get(
+        name=group.current_semester)
     is_exam = 'exam' in request.GET
-    group_points_data = group_exam_results(group, semester) if is_exam else group_brs_points(group, semester, check_point)
+    group_points_data = group_exam_results(group, semester) if is_exam else group_brs_points(group, semester,
+                                                                                             check_point)
     if 'excel' in request.GET:
         wb = export_exam_points(group_points_data) if is_exam else export_group_points(group, semester)
         response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-        response['Content-Disposition'] = 'attachment; filename=' + translit(group.name, 'ru', reversed=True) + '_sem_' + semester.name + '.xlsx'
+        response['Content-Disposition'] = 'attachment; filename=' + translit(group.name, 'ru',
+                                                                             reversed=True) + '_sem_' + semester.name + '.xlsx'
         wb.save(response)
         return response
     else:
-        form = GetGroupPointsForm(initial={'group':group.id, 'semester': semester.id, 'checkpoint': check_point.id, 'exam': is_exam})
-        return render(request,'group_points.html', {'data':group_points_data, 'form': form, 'is_exam': is_exam})
+        form = GetGroupPointsForm(
+            initial={'group': group.id, 'semester': semester.id, 'checkpoint': check_point.id, 'exam': is_exam})
+        return render(request, 'group_points.html', {'data': group_points_data, 'form': form, 'is_exam': is_exam})

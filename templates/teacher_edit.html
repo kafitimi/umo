@@ -5,7 +5,11 @@
     <div class="container">
         <form action="" method="post">
             {% csrf_token %}
-            <h1>{% if profile %}Профиль{% else %}Редактирование{% endif %} сотрудника</h1>
+            <h1>{% if profile %}Профиль{% else %}Редактирование{% endif %}</h1>
+            {% if student %}<h2>студента</h2>
+            {% endif %}
+            {% if teacher %}<h2>сотрудника</h2>
+            {% endif %}
             <br>
             <div class="row">
                 <div class="col-md-6 offset-md-3">

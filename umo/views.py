@@ -15,7 +15,7 @@ from django.forms import ModelForm, CharField, ValidationError, PasswordInput, H
 from openpyxl import Workbook
 from openpyxl.styles import PatternFill, Border, Alignment, Protection, Font, Side
 
-import synch.models as sync_models
+# import synch.models as sync_models
 from umo.models import (Teacher, Group, GroupList, Synch, Year, EduProgram, Student, Discipline, CheckPoint, Control,
                         DisciplineDetails, BRSpoints, EduPeriod, ExamMarks, Exam)
 
@@ -24,7 +24,7 @@ def index(request):
     if auth_groups.objects.get(name='teacher') in request.user.groups.all():
         return redirect('disciplines:mysubjects')
     else:
-        return redirect('disciplines:disciplines_list')
+        return redirect('students:student_profile')
 
 
 class TeacherList(PermissionRequiredMixin, ListView):

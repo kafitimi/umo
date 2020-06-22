@@ -1,0 +1,51 @@
+{% extends 'base.html' %}
+{% load extra_tags %}
+{% block title %}Зачетка{% endblock %}
+
+{% block content %}
+<div class="container">
+    {% for year in student.group.edu_years %}
+        {% if year|get_semesters_for_year and year|has_scores_for_year:student %}
+            <div class="table-responsive"> 
+                <table class="table table-bordered table-hover">
+                    <!-- <caption>Учебный год {{ student.group.begin_year }}/2020</caption> -->
+                    <caption>Учебный год {{ year.year }}/{{ year.year|add:1 }}</caption>
+                    <thead class="thead-light">
+                        <tr>
+                            <th scope="col" rowspan="2">Дисциплина</th>
+                            <th scope="col" rowspan="2">Форма контроля</th>
+                            <th scope="col" colspan="2">Оцека</th>
+                            <th scope="col" rowspan="2">Преподаватель</th>
+                            <th scope="col" rowspan="2">Дата</th>
+                        </tr>
+                        <tr>
+                            <th scope="col">10 балльная</th>
+                            <th scope="col">5 балльная</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for semester in year|get_semesters_for_year %}
+                            {% if student|get_exam_marks_for_semester:semester %}
+                                <tr><th class="pl-5" scope="col" colspan="6">{{ semester }} семестр</th></tr>
+                                {% for exammark in student|get_exam_marks_for_semester:semester %}
+                                        <tr>
+                                            <td>{{ exammark.exam.course.name }}</td>
+                                            <td>{{ exammark.exam.control_type }}</td>
+                                            <td>{{ exammark.mark_symbol }}</td>
+                                            <td>{{ exammark.mark_to_text }}</td>
+                                            <td>{{ exammark.exam.course.lecturer }}</td>
+                                            <td>{{ exammark.exam.examDate }}</td>
+                                        </tr>
+                                {% endfor %}
+                            {% endif %}
+                        {% endfor %}
+                    </tbody>
+                </table>
+                <hr>
+            </div>
+        {% endif %}
+    {% endfor %}
+</div>
+
+<hr>
+{% endblock %}

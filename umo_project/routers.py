@@ -1,5 +1,6 @@
 from synch.models import YSUMainModel
 
+
 class DatabaseRouter(object):
     def db_for_read(self, model, **hints):
         if issubclass(model, YSUMainModel):
